@@ -22,6 +22,7 @@ const COMMAND_DOWNLOAD_FRAMEWORK = "download framework"
 const COMMAND_DOWNLOAD_ARTIFACTS = "download artifacts"
 const COMMAND_GET_VERSION = "version"
 const COMMAND_GET_HELP = "help"
+const COMMAND_SCAN_WORKLOAD = "scan workload"
 
 const ERROR_KUBESCAPE_NOT_INSTALLED = "Kubescape is not installed!"
 
@@ -736,6 +737,43 @@ export class KubescapeApi {
             
             return await ui.slow<any>("Kubescape scanning", async () => {
                 return new Promise<any>(resolve => {
+                    cp.exec(cmd, async (err, stdout, stderr) => {
+                        ui.debug(`stdout: ${stdout}, stderr: ${stderr}`)
+                        if (err) {
+                            ui.error(stderr)
+                        }
+
+                        var report = JSON.parse(fs.readFileSync(file, 'utf8'));
+                        if (!report) {
+                            ui.error(`not valid response was given. stdout: ${stdout}, stderr: ${stderr}`)
+                            return resolve({})
+                        }
+                        ui.debug('appending controls info to report')
+                        await this.appendControlsInformationToV2Report(report);
+                        return resolve(report)   
+                    })
+                })
+            })
+        })
+    }
+
+    async workloadScanYaml(ui: KubescapeUi, filePath: string, name: string, kind: string, overrideArgs?: any){
+        return await withTempFile(`report-${uuidv4()}.json`, async (file) => {
+            const args = {
+                "use-artifacts-from": `\"${this.frameworkDirectory}\"`,
+                "format": "json",
+                "format-version": "v2",
+                "output": `\"${file}\"`,
+                "keep-local": true,
+            }
+            
+            if(overrideArgs){
+                Object.assign(args, overrideArgs)
+            }
+
+            return ui.slow<any>("Kubescape scanning", async () => {
+                return new Promise<any>(resolve => {
+                    const cmd = this._buildKubescapeCommand(`${COMMAND_SCAN_WORKLOAD+" "+kind+"/"+name+" "} "${path.resolve(filePath)}"`, null, args);
                     cp.exec(cmd, async (err, stdout, stderr) => {
                         ui.debug(`stdout: ${stdout}, stderr: ${stderr}`)
                         if (err) {
